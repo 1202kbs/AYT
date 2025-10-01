@@ -21,7 +21,7 @@ To mitigate oscillatory tangents, we propose a new loss function, called the **m
 </p>
 
 Consequently, our method -- dubbed **Align Your Tangent (AYT)** -- can accelerate CM training by orders of magnitude and even out-perform the learned perceptual image patch similarity metric (LPIPS).
-Furthermore, we find that our loss enables training with extremely small batch sizes without compromising sample quality.
+Furthermore, we find that our loss enables training with extremely small batch sizes without compromising sample quality. **For instance, on CIFAR10, we achieve 10 times faster convergence and competitive FIDs with 1/8 batch size (bs), as shown in the above figure.**
 
 ## Training Consistency Models
 
