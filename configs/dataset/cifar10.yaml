@@ -1,0 +1,4 @@
+name: cifar10
+size: 32
+channels: 3
+batch_size: 512

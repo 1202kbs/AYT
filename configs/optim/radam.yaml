@@ -1,0 +1,4 @@
+name: radam
+lr: 1e-4
+weight_decay: 0.0
+n_grad_accum: 1

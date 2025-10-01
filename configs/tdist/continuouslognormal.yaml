@@ -1,0 +1,9 @@
+name: continuouslognormal
+mu: -1.1
+std: 2.0
+q: 256
+k: 8.0
+b: 1.0
+n_stages: 1
+n_train_iter: 400000
+adj: sigmoid

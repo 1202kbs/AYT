@@ -1,0 +1,22 @@
+exp:
+  name: cifar10
+  n_train_iter: 400000
+  n_rampup_iter: 5000
+  eval_bs: 500
+  eval_every: 500
+  save_every: 10000
+  lmda1: 100000.0
+  ema_decay: 0.9999
+  n_viz: 100
+  n_FID: 5000
+  FID_bs: 250
+  use_wandb: True
+
+defaults:
+  - dataset: cifar10
+  - tdist: continuouslognormal
+  - optim: radam
+  - solver: euler
+  - unet: cifar10_unet
+  - loss: pseudohuber
+  - classifier: vgg

@@ -1,0 +1,12 @@
+img_resolution: 32
+img_channels: 3
+label_dim: 0
+augment_dim: 9
+sigma_min: 0.002
+sigma_max: 80.0
+model_type: SongUNet
+dropout: 0.2
+label_dropout: 0.0
+channel_mult: [2,2,2]
+attn_resolutions: [16]
+ckpt_path: null

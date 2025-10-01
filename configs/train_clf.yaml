@@ -1,0 +1,14 @@
+exp:
+  name: cifar10
+  n_train_iter: 400000
+  eval_bs: 500
+  eval_every: 500
+  save_every: 10000
+  n_rampup_iter: 50000
+  use_wandb: True
+
+defaults:
+  - dataset: cifar10
+  - optim: radam
+  - aug: geo_clr_deg
+  - classifier: vgg
