@@ -29,7 +29,7 @@ Furthermore, we find that our loss enables training with extremely small batch s
 
 If you want to use wandb to track your experiments,
 
-1. Log into your wandb account.
+1. Log into your wandb account. See this [link](https://docs.wandb.ai/quickstart/) for a quick how-to.
 2. Go to ``src/ayt/utils.py`` and enter your project name in the ``init_wandb`` function.
 3. Set ``exp.use_wandb=True`` in training bash scripts.
 
