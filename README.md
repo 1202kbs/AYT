@@ -1,6 +1,6 @@
 # Align Your Tangent
 
-Official PyTorch implementation of "Align Your Tangent: Training Better Consistency Models via Manifold-Aligned Tangents" by [Beomsu Kim](https://scholar.google.co.kr/citations?user=TofIFUgAAAAJ&hl=en)\*, [Byunghee Cha](https://openreview.net/profile?id=~ByungHee_Cha1)\*, and [Jong Chul Ye](https://scholar.google.com/citations?user=HNMjoNEAAAAJ&hl=en) (\*Equal contribution).
+Official PyTorch implementation of [Align Your Tangent: Training Better Consistency Models via Manifold-Aligned Tangents](https://arxiv.org/abs/2510.00658) by [Beomsu Kim](https://scholar.google.co.kr/citations?user=TofIFUgAAAAJ&hl=en)\*, [Byunghee Cha](https://openreview.net/profile?id=~ByungHee_Cha1)\*, and [Jong Chul Ye](https://scholar.google.com/citations?user=HNMjoNEAAAAJ&hl=en) (\*Equal contribution).
 
 Consistency Models (CMs), which are trained to be consistent on diffusion or probability flow ordinary differential equation (PF-ODE) trajectories, enable one or two-step flow or diffusion sampling.
 However, CMs typically require prolonged training with large batch sizes to obtain competitive sample quality.
@@ -68,7 +68,7 @@ If you find this paper useful for your research, please consider citing
   kim2025ayt,
   title={Align Your Tangent: Training Better Consistency Models via Manifold-Aligned Tangents},
   author={Beomsu Kim and Byunghee Cha and Jong Chul Ye},
-  journal={arXiv preprint arXiv:},
+  journal={arXiv preprint arXiv:2510.00658},
   year={2025}
 }
 ```
