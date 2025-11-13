@@ -1,0 +1,3 @@
+name: ResNet
+n_classes: 15
+ckpt_path: Null

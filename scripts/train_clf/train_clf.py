@@ -12,6 +12,7 @@ import warnings
 import hydra
 import torch
 import wandb
+import time
 import sys
 import os
 
@@ -63,6 +64,7 @@ def main(cfg: DictConfig):
         init_wandb(cfg)
     
     # Training loop
+    s = time.time()
     iteration = 0
     while True:
         for (x0,y0) in train_loader:
@@ -80,12 +82,15 @@ def main(cfg: DictConfig):
             opt_clf.step()
 
             iteration += 1
+            e = time.time()
+            dur = (e - s) / 3600
+            eta = (e - s) / iteration * n_train_iter / 3600
 
             # Logging
             if use_wandb:
                 stats = {'Loss CLF' : loss_clf.item()}
                 wandb.log(stats)
-            print('[{}] Iteration {} Loss {:.3f}'.format(exp_name, iteration, loss_clf.item()))
+            print('[{}] Iteration {} Loss {:.3f} ETA {:.3f}/{:.3f} (hours)'.format(exp_name, iteration, loss_clf.item(), dur, eta))
 
             # Saving checkpoint
             if (iteration % save_iter == 0):

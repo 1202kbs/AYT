@@ -18,6 +18,7 @@ import pickle
 import hydra
 import torch
 import wandb
+import time
 import copy
 import sys
 import os
@@ -133,6 +134,7 @@ def main(cfg: DictConfig):
         init_wandb(cfg)
     
     # Training loop
+    s = time.time()
     iteration = 0
     curr_fid = best_fid = 500
     curr_dfids = {0.2 : 500, 0.4 : 500, 0.8 : 500}
@@ -172,6 +174,9 @@ def main(cfg: DictConfig):
             update_ema(net=unet, net_ema=unet_ema, ema_decay=cfg['exp']['ema_decay'])
 
             iteration += 1
+            e = time.time()
+            dur = (e - s) / 3600
+            eta = (e - s) / iteration * n_train_iter / 3600
 
             # Evaluate fid score and visualize images
             if iteration % eval_iter == 0:
@@ -189,7 +194,7 @@ def main(cfg: DictConfig):
                         'FID' : curr_fid}
                 stats = stats | {'dFID {:.1f}'.format(k) : v for (k,v) in curr_dfids.items()}
                 wandb.log(stats)
-            print('[{}] Iteration {} Loss {:.3f} FID {:.3f}'.format(exp_name, iteration, loss.item(), curr_fid))
+            print('[{}] Iteration {} Loss {:.3f} FID {:.3f} ETA {:.3f}/{:.3f} (hours)'.format(exp_name, iteration, loss.item(), curr_fid, dur, eta))
 
             # Saving checkpoint
             if (iteration % save_iter == 0):
