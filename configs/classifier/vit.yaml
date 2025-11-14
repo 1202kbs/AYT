@@ -2,7 +2,10 @@ name: ViT
 img_resolution: 32
 in_channels: 3
 n_classes: 15
-dim: 1024
-depth: 6
-heads: 16
+# dim: 1024
+# depth: 6
+# heads: 16
+dim: 256
+depth: 3
+heads: 8
 ckpt_path: Null

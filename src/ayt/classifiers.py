@@ -377,5 +377,5 @@ def get_classifier(cfg):
                 mlp_dim=2048)
     elif 'ResNet' in cfg['name']:
         return ResNet(block=BasicBlock,
-                      num_blocks=[2,2,2,2],
+                      num_blocks=[1,1,1,1],
                       num_classes=cfg['n_classes'])
