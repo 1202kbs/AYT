@@ -1,15 +1,14 @@
 exp:
   name: cifar10
   n_train_iter: 400000
-  eval_bs: 500
+  n_rampup_iter: 5000
   eval_every: 500
   save_every: 10000
-  n_rampup_iter: 50000
+  n_viz: 100
   use_wandb: True
 
 defaults:
   - dataset: cifar10
   - optim: radam
-  - aug: geo_clr_deg
   - autoencoder: cifar10_ae
-  - classifier: vgg
+  - loss: pseudohuber
