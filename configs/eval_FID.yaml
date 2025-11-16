@@ -1,0 +1,16 @@
+exp:
+  name: cifar10
+  n_runs: 3
+  n_FID: 50000
+  FID_bs: 1000
+  n_steps: 1
+  ckpt_dir: null
+  use_dfid: false
+  s_idx: 1
+  e_idx: 40
+  unit: 10000
+
+defaults:
+  - dataset: cifar10
+  - unet: cifar10_unet
+  - solver: euler

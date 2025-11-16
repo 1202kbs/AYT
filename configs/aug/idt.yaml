@@ -1,0 +1,56 @@
+name: idt
+n_labs: 0
+
+# Overall augmentation probability
+p: 0.15
+
+# Pixel blitting
+xflip: 0.0
+yflip: 0.0
+rotate_int: 0.0
+translate_int: 0.0
+
+# Geometric transformations, 7 labels
+scale: 0.0
+rotate_frac: 0.0
+aniso: 0.0
+translate_frac: 0.0
+
+# Color transformations, 5 labels
+brightness: 0.0
+contrast: 0.0
+lumaflip: 0.0
+hue: 0.0
+saturation: 0.0
+
+# Photometric transformations, 1 label
+gaussian_blur: 0.0
+
+# Additive transformations, 2 labels
+mixup: 0.0
+noise: 0.0
+
+# Parameters
+# Pixel blitting
+translate_int_max: 0.125
+
+# Geometric transformation
+scale_std: 0.2
+rotate_frac_max: 1.0
+aniso_std: 0.2
+aniso_rotate_prob: 0.5
+translate_frac_std: 0.125
+
+# Color transformations
+brightness_std: 0.2
+contrast_std: 0.5
+hue_max: 1.0
+saturation_std: 1.0
+
+# Photometric transformations
+blur_kernel_size: 11
+blur_sigma_max: 3.0
+
+# Additive transformations
+mixup_beta: 3.0
+noise_std: 0.5

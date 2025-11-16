@@ -28,6 +28,7 @@ def main(cfg: DictConfig):
     use_wandb = cfg['exp']['use_wandb']
     n_train_iter = cfg['exp']['n_train_iter']
     eval_iter = cfg['exp']['eval_every']
+    sigma = cfg['exp']['sigma']
 
     n_viz = cfg['exp']['n_viz']
     save_iter = cfg['exp']['save_every']
@@ -69,7 +70,7 @@ def main(cfg: DictConfig):
         for (x0,y0) in train_loader:
 
             # Sample data and noise
-            x0, eps = x0.cuda(), torch.randn_like(x0).cuda()
+            x0, eps = x0.cuda(), sigma*torch.randn_like(x0).cuda()
             sigma = torch.rand(size=[x0.shape[0],1,1,1]).cuda()
             xs = x0 + sigma * eps
 

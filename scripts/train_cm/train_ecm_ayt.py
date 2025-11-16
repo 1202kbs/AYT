@@ -106,12 +106,19 @@ def main(cfg: DictConfig):
     clf = get_classifier(cfg['classifier']).cuda()
 
     if cfg['unet']['ckpt_path'] is not None:
-        with open(cfg['unet']['ckpt_path'] , 'rb') as f:
-            ckpt = pickle.load(f)['ema'].state_dict()
-            unet.load_state_dict(filter_state_dict(ckpt),strict=False)
+        if 'pkl' in cfg['unet']['ckpt_path']:
+            with open(cfg['unet']['ckpt_path'] , 'rb') as f:
+                ckpt = pickle.load(f)['ema'].state_dict()
+                unet.load_state_dict(filter_state_dict(ckpt),strict=False)
+            unet_ema = copy.deepcopy(unet)
+        else:
+            unet.load_state_dict(torch.load(cfg['unet']['ckpt_path']))
+            unet_ema = copy.deepcopy(unet)
+            unet_ema.load_state_dict(torch.load(cfg['unet']['ckpt_path'].replace('unet','unet_ema')))
         print('Loading unet checkpoint from [{}]'.format(cfg['unet']['ckpt_path']))
     else:
         print('No checkpoint provided for unet. Using random initialization.')
+        unet_ema = copy.deepcopy(unet)
     
     if cfg['classifier']['ckpt_path'] is not None:
         clf.load_state_dict(torch.load(cfg['classifier']['ckpt_path'],weights_only=True),strict=False)
@@ -119,7 +126,6 @@ def main(cfg: DictConfig):
     else:
         print('No checkpoint provided for classifier. Using random initialization.')
 
-    unet_ema = copy.deepcopy(unet)
     if len(device_ids) > 1:
         unet = torch.nn.DataParallel(unet, device_ids=device_ids)
         unet_ema = torch.nn.DataParallel(unet_ema, device_ids=device_ids)
