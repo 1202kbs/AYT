@@ -12,4 +12,5 @@ defaults:
   - optim: radam
   - aug: geo_clr_deg
   - autoencoder: cifar10_ae
+  - unet: cifar10_unet
   - classifier: vgg

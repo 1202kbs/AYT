@@ -4,7 +4,7 @@ exp:
   n_rampup_iter: 5000
   eval_every: 2000
   save_every: 10000
-  sigma: 0.01
+  sigma_max: 1.0
   n_viz: 100
   use_wandb: True
 

@@ -3,7 +3,7 @@ from ayt.constants import CONFIG_ROOT, RESULT_ROOT
 from ayt.augmentations import get_augmentation
 from ayt.classifiers import get_classifier
 from ayt.datasets import get_dataset
-from ayt.autoencoders import get_ae
+from ayt.unets import get_unet
 from ayt import torch_utils
 
 from omegaconf import DictConfig, OmegaConf
@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader
 
 import numpy as np
 import warnings
+import pickle
 import hydra
 import torch
 import wandb
@@ -20,6 +21,13 @@ import os
 
 sys.modules['torch_utils'] = torch_utils
 warnings.filterwarnings("ignore")
+
+def filter_state_dict(state_dict):
+    res = []
+    for n,p in state_dict.items():
+        if ('map_augment' not in n):
+            res.append((n,p))
+    return dict(res)
 
 @hydra.main(version_base=None, config_path=CONFIG_ROOT, config_name='train_clf')
 def main(cfg: DictConfig):
@@ -55,15 +63,16 @@ def main(cfg: DictConfig):
     
     aug = get_augmentation(cfg['aug'])
     
-    aes = []
-    ae_ckpts = ['/home/beomsu/Desktop/Codes/AYT/results/cifar10_dae/ckpts/unet_iter{}.pt'.format(10000*it) for it in range(1,4)]
-    for ae_ckpt in ae_ckpts:
-        ae = get_ae(cfg['autoencoder']).cuda()
-        ae.load_state_dict(torch.load(ae_ckpt))
-        ae.train()
-        aes.append(ae)
+    unet = get_unet(cfg['unet']).cuda()
+    if cfg['unet']['ckpt_path'] is not None:
+        if 'pkl' in cfg['unet']['ckpt_path']:
+            with open(cfg['unet']['ckpt_path'] , 'rb') as f:
+                ckpt = pickle.load(f)['ema'].state_dict()
+                unet.load_state_dict(filter_state_dict(ckpt),strict=False)
+                unet.eval()
     
     # Initialize step, iteration, checkpoint directories, wandb
+    assert cfg['classifier']['n_classes'] == (cfg['aug']['n_labs']+1), "Classifier output dimension must equal number of augmentation labels."
     print('Checkpoints will be saved at [{}]'.format(ckpt_dir))
     create_dir_if_empty(ckpt_dir)
     create_dir_if_empty(plot_dir)
@@ -76,6 +85,7 @@ def main(cfg: DictConfig):
     # Training loop
     s = time.time()
     iteration = 0
+    nl = 1e-3 * torch.ones(size=[cfg['aug']['n_labs']+1]).cuda()
     while True:
         for (x0,y0) in train_loader:
             
@@ -84,21 +94,27 @@ def main(cfg: DictConfig):
             aug.p = ru_factor * cfg['aug']['p']
             
             x_aug = x0.cuda()
-            ae_w = torch.rand([bs,1,1,1]).cuda()
-            ae_w = torch.where(torch.rand([bs,1,1,1]).cuda() < aug.p, ae_w, torch.zeros_like(ae_w))
-            ae_idx = np.random.randint(len(aes))
+            ae_w = torch.rand([bs]).cuda() < aug.p
+            sigma = (0.5 * torch.rand(size=[bs]).cuda()).clamp(min=0.002)
             with torch.no_grad():
-                x_rec = aes[ae_idx](x_aug)
-                x_aug = (1 - ae_w) * x_aug + ae_w * x_rec
+                if ae_w.sum() > 0:
+                    x_rec = unet((x_aug+sigma.reshape(-1,1,1,1)*torch.randn_like(x_aug))[ae_w],sigma[ae_w])
+                    x_aug[ae_w] = x_rec
+                    ae_w = ae_w.float()
             
             x_aug, labs = aug(x_aug,torch.ones(size=[bs]).cuda())
             labs = torch.cat([ae_w.reshape(-1,1),labs],dim=1)
+            
+            # update normalizing factor
+            labs_max = labs.abs().max(dim=0)[0]
+            nl = nl.clamp(min=labs_max)
 
             clf.train()
             opt_clf.zero_grad()
             labs_pred = clf(x_aug)
-            loss_clf = (labs-labs_pred).abs().mean()
-            loss_clf_ae = (labs[:,0]-labs_pred[:,0]).abs().mean()
+            loss_clf = (labs/nl.reshape(1,-1)-labs_pred).square().mean()
+            loss_clf_ae_abs = (labs[:,0]-nl[0]*labs_pred[:,0])[ae_w.flatten()>0].abs().mean()
+            loss_clf_abs = (labs-nl.reshape(1,-1)*labs_pred).abs().mean()
             loss_clf.backward()
             opt_clf.step()
 
@@ -110,7 +126,8 @@ def main(cfg: DictConfig):
             # Logging
             if use_wandb:
                 stats = {'Loss CLF'    : loss_clf.item(),
-                         'Loss CLF AE' : loss_clf_ae.item()}
+                         'Loss CLF ABS' : loss_clf_abs.item(),
+                         'Loss CLF AE ABS' : loss_clf_ae_abs.item()}
                 wandb.log(stats)
             print('[{}] Iteration {} Loss {:.3f} ETA {:.3f}/{:.3f} (hours)'.format(exp_name, iteration, loss_clf.item(), dur, eta))
 

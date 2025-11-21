@@ -95,7 +95,7 @@ def main(cfg: DictConfig):
                 FIDs[ckpt_path].append(calculate_fid_given_paths(paths=[tmpdirname,fid_stat_dir], batch_size=FID_bs, device='cuda:0', dims=2048))
             print('FID : {:.3f}'.format(FIDs[ckpt_path][-1]))
     
-        torch.save(FIDs, os.path.join(result_dir,'FIDs.pt'))
+        torch.save(FIDs, os.path.join(result_dir,'{}.pt'.format(exp_name)))
 
 if __name__ == "__main__":
     main()

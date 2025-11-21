@@ -1,6 +1,7 @@
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
+import math
 
 from einops import rearrange
 from einops.layers.torch import Rearrange
@@ -52,6 +53,95 @@ class VGG(nn.Module):
                 block_idx = 0
             else:
                 self.layers[f'{res}x{res}_block{block_idx}'] = block(nc,x)
+                block_idx += 1
+                nc = x
+        self.layers[f'{res}x{res}_avgpool'] = nn.AvgPool2d(kernel_size=res,stride=res)
+        self.layers[f'classifier'] = nn.Linear(512, self.n_classes)
+
+    def forward(self, x, return_feats=False):
+        feats = []
+        for name, layer in self.layers.items():
+            if 'classifier' in name:
+                x = x.flatten(start_dim=1)
+                x = layer(x)
+                feats.append(x[...,None,None].clone())
+            elif 'maxpool' in name:
+                x = layer(x)
+                feats.append(x.clone())
+            else:
+                x = layer(x)
+        
+        if return_feats:
+            return feats
+        else:
+            return x
+
+    def __get_diff__(self,x,y,w=None):
+        '''
+        x,y : tensors of shape NxCxHxW
+        w : weight tensor of shape NxC
+        '''
+        return (w*ph(x-y,dim=(2,3))).sum(dim=1)
+
+    def distance(self,x,y,reduce_mean=False):
+        diffs = 0
+        x_feats = self.forward(x,return_feats=True)
+        y_feats = self.forward(y,return_feats=True)
+        for i in range(len(x_feats)):
+            xf, yf = x_feats[i], y_feats[i]
+            w = torch.ones(size=[1,xf.shape[1]]).cuda()
+            diffs += self.__get_diff__(xf,yf,w)
+        if reduce_mean:
+            diffs = diffs.mean()
+        return diffs
+
+##############################################################################################################
+##############################################################################################################
+# Modified VGG
+
+vggmod_cfg = {
+    'VGGMod11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'VGGMod13': [64, 64, 'M', 128, 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
+    'VGGMod16': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M'],
+    'VGGMod19': [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 256, 'M', 512, 512, 512, 512, 'M', 512, 512, 512, 512, 'M'],
+}
+
+def ph(x,dim,eps=1e-5):
+    return (x.square().sum(dim=dim)+eps**2).sqrt()-eps
+
+class VGGModBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, use_bn=True, downsample=False):
+        super(VGGModBlock, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, stride=(2 if downsample else 1), kernel_size=3, padding=1)
+        self.bn = nn.BatchNorm2d(out_channels) if use_bn else nn.Identity()
+        self.relu = nn.ReLU(inplace=True)
+    
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.relu(x)
+        return x
+
+class VGGMod(nn.Module):
+    def __init__(self, vgg_name, img_resolution, in_channels, n_classes, use_bn=True, use_maxpool=True):
+        super(VGGMod, self).__init__()
+        self.img_resolution = img_resolution
+        self.in_channels = in_channels
+        self.n_classes = n_classes
+
+        # Make VGG layers
+        cfg = vggmod_cfg[vgg_name]
+        res, nc, block_idx = self.img_resolution, self.in_channels, 0
+        self.layers = torch.nn.ModuleDict()
+        pool, block = (nn.MaxPool2d, VGGModBlock)
+        for i,x in enumerate(cfg):
+            if x == 'M':
+                self.layers[f'{res}x{res}_maxpool'] = pool(kernel_size=2,stride=2) if use_maxpool else nn.Identity()
+                res = res >> 1
+                block_idx = 0
+            else:
+                downsample = True if ((not use_maxpool) and cfg[i+1]=='M') else False
+                self.layers[f'{res}x{res}_block{block_idx}'] = block(nc,x,use_bn=use_bn,downsample=downsample)
                 block_idx += 1
                 nc = x
         self.layers[f'{res}x{res}_avgpool'] = nn.AvgPool2d(kernel_size=res,stride=res)
@@ -358,10 +448,123 @@ class ResNet(nn.Module):
 
 ##############################################################################################################
 ##############################################################################################################
+# DenseNet
+
+class DenseNetBottleneck(nn.Module):
+    def __init__(self, in_planes, growth_rate):
+        super(DenseNetBottleneck, self).__init__()
+        self.bn1 = nn.BatchNorm2d(in_planes)
+        self.conv1 = nn.Conv2d(in_planes, 4*growth_rate, kernel_size=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(4*growth_rate)
+        self.conv2 = nn.Conv2d(4*growth_rate, growth_rate, kernel_size=3, padding=1, bias=False)
+
+    def forward(self, x):
+        out = self.conv1(F.relu(self.bn1(x)))
+        out = self.conv2(F.relu(self.bn2(out)))
+        out = torch.cat([out,x], 1)
+        return out
+
+
+class Transition(nn.Module):
+    def __init__(self, in_planes, out_planes):
+        super(Transition, self).__init__()
+        self.bn = nn.BatchNorm2d(in_planes)
+        self.conv = nn.Conv2d(in_planes, out_planes, kernel_size=1, bias=False)
+
+    def forward(self, x):
+        out = self.conv(F.relu(self.bn(x)))
+        out = F.avg_pool2d(out, 2)
+        return out
+
+
+class DenseNet(nn.Module):
+    def __init__(self, block, nblocks, growth_rate=12, reduction=0.5, num_classes=10):
+        super(DenseNet, self).__init__()
+        self.growth_rate = growth_rate
+
+        num_planes = 2*growth_rate
+        self.conv1 = nn.Conv2d(3, num_planes, kernel_size=3, padding=1, bias=False)
+
+        self.dense1 = self._make_dense_layers(block, num_planes, nblocks[0])
+        num_planes += nblocks[0]*growth_rate
+        out_planes = int(math.floor(num_planes*reduction))
+        self.trans1 = Transition(num_planes, out_planes)
+        num_planes = out_planes
+
+        self.dense2 = self._make_dense_layers(block, num_planes, nblocks[1])
+        num_planes += nblocks[1]*growth_rate
+        out_planes = int(math.floor(num_planes*reduction))
+        self.trans2 = Transition(num_planes, out_planes)
+        num_planes = out_planes
+
+        self.dense3 = self._make_dense_layers(block, num_planes, nblocks[2])
+        num_planes += nblocks[2]*growth_rate
+        out_planes = int(math.floor(num_planes*reduction))
+        self.trans3 = Transition(num_planes, out_planes)
+        num_planes = out_planes
+
+        self.dense4 = self._make_dense_layers(block, num_planes, nblocks[3])
+        num_planes += nblocks[3]*growth_rate
+
+        self.bn = nn.BatchNorm2d(num_planes)
+        self.linear = nn.Linear(num_planes, num_classes)
+
+    def _make_dense_layers(self, block, in_planes, nblock):
+        layers = []
+        for i in range(nblock):
+            layers.append(block(in_planes, self.growth_rate))
+            in_planes += self.growth_rate
+        return nn.Sequential(*layers)
+
+    def forward(self, x, return_feats=False):
+        feats = []
+        out = self.conv1(x)
+        out = self.trans1(self.dense1(out))
+        feats.append(out.clone())
+        out = self.trans2(self.dense2(out))
+        feats.append(out.clone())
+        out = self.trans3(self.dense3(out))
+        feats.append(out.clone())
+        out = self.dense4(out)
+        out = F.avg_pool2d(F.relu(self.bn(out)), 4)
+        feats.append(out.clone())
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        feats.append(out.clone())
+        
+        if return_feats:
+            return feats
+        else:
+            return out
+
+    def distance(self,x,y,reduce_mean=False):
+        diffs = 0
+        x_feats = self.forward(x,return_feats=True)
+        y_feats = self.forward(y,return_feats=True)
+        for i in range(len(x_feats)):
+            xf, yf = x_feats[i], y_feats[i]
+            if i < len(x_feats)-1:
+                diffs += ph(xf-yf,dim=(2,3)).sum(dim=1)
+            else:
+                diffs += ph((xf-yf)[...,None],dim=2).sum(dim=1)
+        
+        if reduce_mean:
+            diffs = diffs.mean()
+        return diffs
+
+##############################################################################################################
+##############################################################################################################
 
 
 def get_classifier(cfg):
-    if 'VGG' in cfg['name']:
+    if 'VGGMod' in cfg['name']:
+        return VGGMod(vgg_name=cfg['name'],
+                img_resolution=cfg['img_resolution'],
+                in_channels=cfg['in_channels'],
+                n_classes=cfg['n_classes'],
+                use_bn=cfg['use_bn'],
+                use_maxpool=cfg['use_maxpool'])
+    elif 'VGG' in cfg['name']:
         return VGG(vgg_name=cfg['name'],
                 img_resolution=cfg['img_resolution'],
                 in_channels=cfg['in_channels'],
@@ -379,3 +582,8 @@ def get_classifier(cfg):
         return ResNet(block=BasicBlock,
                       num_blocks=[1,1,1,1],
                       num_classes=cfg['n_classes'])
+    elif 'DenseNet' in cfg['name']:
+        return DenseNet(block=DenseNetBottleneck,
+                        nblocks=[3,6,12,8],
+                        growth_rate=16,
+                        num_classes=cfg['n_classes'])

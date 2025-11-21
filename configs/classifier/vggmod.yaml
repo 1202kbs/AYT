@@ -1,0 +1,7 @@
+name: VGGMod16
+img_resolution: 32
+in_channels: 3
+n_classes: 15
+use_bn: True
+use_maxpool: True
+ckpt_path: Null
