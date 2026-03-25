@@ -28,7 +28,7 @@ def weight_init(shape, mode, fan_in, fan_out):
 #----------------------------------------------------------------------------
 # Fully-connected layer.
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class Linear(torch.nn.Module):
     def __init__(self, in_features, out_features, bias=True, init_mode='kaiming_normal', init_weight=1, init_bias=0):
         super().__init__()
@@ -47,7 +47,7 @@ class Linear(torch.nn.Module):
 #----------------------------------------------------------------------------
 # Convolutional layer with optional up/downsampling.
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class Conv2d(torch.nn.Module):
     def __init__(self,
         in_channels, out_channels, kernel, bias=True, up=False, down=False,
@@ -94,7 +94,7 @@ class Conv2d(torch.nn.Module):
 #----------------------------------------------------------------------------
 # Group normalization.
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class GroupNorm(torch.nn.Module):
     def __init__(self, num_channels, num_groups=32, min_channels_per_group=4, eps=1e-5):
         super().__init__()
@@ -112,14 +112,18 @@ class GroupNorm(torch.nn.Module):
 # Performs all computation using FP32, but uses the original datatype for
 # inputs/outputs/gradients to conserve memory.
 
+def Attention(q,k):
+    w = torch.einsum('ncq,nck->nqk', q.to(torch.float32), (k / np.sqrt(k.shape[1])).to(torch.float32)).softmax(dim=2).to(q.dtype)
+    return w
+
 class AttentionOp(torch.autograd.Function):
-    @staticmethod
+    # @staticmethod
     def forward(ctx, q, k):
         w = torch.einsum('ncq,nck->nqk', q.to(torch.float32), (k / np.sqrt(k.shape[1])).to(torch.float32)).softmax(dim=2).to(q.dtype)
         ctx.save_for_backward(q, k, w)
         return w
 
-    @staticmethod
+    # @staticmethod
     def backward(ctx, dw):
         q, k, w = ctx.saved_tensors
         db = torch._softmax_backward_data(grad_output=dw.to(torch.float32), output=w.to(torch.float32), dim=2, input_dtype=torch.float32)
@@ -132,7 +136,7 @@ class AttentionOp(torch.autograd.Function):
 # Represents the union of all features employed by the DDPM++, NCSN++, and
 # ADM architectures.
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class UNetBlock(torch.nn.Module):
     def __init__(self,
         in_channels, out_channels, emb_channels, up=False, down=False, attention=False,
@@ -182,7 +186,8 @@ class UNetBlock(torch.nn.Module):
 
         if self.num_heads:
             q, k, v = self.qkv(self.norm2(x)).reshape(x.shape[0] * self.num_heads, x.shape[1] // self.num_heads, 3, -1).unbind(2)
-            w = AttentionOp.apply(q, k)
+            # w = AttentionOp.apply(q, k)
+            w = Attention(q, k)
             a = torch.einsum('nqk,nck->ncq', w, v)
             x = self.proj(a.reshape(*x.shape)).add_(x)
             x = x * self.skip_scale
@@ -191,7 +196,7 @@ class UNetBlock(torch.nn.Module):
 #----------------------------------------------------------------------------
 # Timestep embedding used in the DDPM++ and ADM architectures.
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class PositionalEmbedding(torch.nn.Module):
     def __init__(self, num_channels, max_positions=10000, endpoint=False):
         super().__init__()
@@ -210,7 +215,7 @@ class PositionalEmbedding(torch.nn.Module):
 #----------------------------------------------------------------------------
 # Timestep embedding used in the NCSN++ architecture.
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class FourierEmbedding(torch.nn.Module):
     def __init__(self, num_channels, scale=16):
         super().__init__()
@@ -463,7 +468,7 @@ class SiameseToyUNet(torch.nn.Module):
 # Equations". Equivalent to the original implementation by Song et al.,
 # available at https://github.com/yang-song/score_sde_pytorch
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class SongUNet(torch.nn.Module):
     def __init__(self,
         img_resolution,                     # Image resolution at input/output.
@@ -617,7 +622,7 @@ class SongUNet(torch.nn.Module):
 # original implementation by Dhariwal and Nichol, available at
 # https://github.com/openai/guided-diffusion
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class DhariwalUNet(torch.nn.Module):
     def __init__(self,
         img_resolution,                     # Image resolution at input/output.
@@ -714,7 +719,7 @@ class DhariwalUNet(torch.nn.Module):
 # from the paper "Score-Based Generative Modeling through Stochastic
 # Differential Equations".
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class VPPrecond(torch.nn.Module):
     def __init__(self,
         img_resolution,                 # Image resolution.
@@ -773,7 +778,7 @@ class VPPrecond(torch.nn.Module):
 # from the paper "Score-Based Generative Modeling through Stochastic
 # Differential Equations".
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class VEPrecond(torch.nn.Module):
     def __init__(self,
         img_resolution,                 # Image resolution.
@@ -817,7 +822,7 @@ class VEPrecond(torch.nn.Module):
 # Preconditioning corresponding to improved DDPM (iDDPM) formulation from
 # the paper "Improved Denoising Diffusion Probabilistic Models".
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class iDDPMPrecond(torch.nn.Module):
     def __init__(self,
         img_resolution,                     # Image resolution.
@@ -877,7 +882,7 @@ class iDDPMPrecond(torch.nn.Module):
 # Improved preconditioning proposed in the paper "Elucidating the Design
 # Space of Diffusion-Based Generative Models" (EDM).
 
-@persistence.persistent_class
+# @persistence.persistent_class
 class EDMPrecond(torch.nn.Module):
     def __init__(self,
         img_resolution,                     # Image resolution.
