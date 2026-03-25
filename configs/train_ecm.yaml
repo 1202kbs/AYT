@@ -4,7 +4,7 @@ exp:
   n_rampup_iter: 5000
   eval_bs: 500
   eval_every: 500
-  save_every: 10000
+  save_every: 100000
   lmda1: 100000.0
   ema_decay: 0.9999
   n_viz: 100
