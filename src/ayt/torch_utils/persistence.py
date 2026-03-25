@@ -19,7 +19,7 @@ import inspect
 import copy
 import uuid
 import types
-from dada import dnnlib
+from ayt import dnnlib
 
 #----------------------------------------------------------------------------
 
