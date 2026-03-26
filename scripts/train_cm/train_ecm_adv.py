@@ -54,6 +54,15 @@ def calculate_fid(fid_stat_dir, unet, solver, FID_bs, noise_loader, image_loader
         fid_score = calculate_fid_given_paths(paths=[tmpdirname,fid_stat_dir], batch_size=FID_bs, device='cuda:0', dims=2048)
     return fid_score, samples
 
+def compute_r1_loss(discriminator, real_data, gamma):
+    real_data.requires_grad_(True)
+    real_preds = discriminator(real_data)
+    gradients = torch.autograd.grad(outputs=real_preds.sum(),inputs=real_data,create_graph=True)[0]
+    gradients = gradients.view(gradients.size(0), -1)
+    grad_norm = gradients.norm(2, dim=1)
+    r1_penalty = gamma * grad_norm.pow(2).mean()
+    return r1_penalty
+
 def get_noise_dataloader(img_shape, batch_size, num_samples):
     noise = torch.randn((num_samples,) + img_shape)
     return DataLoader(noise, batch_size=batch_size, shuffle=False, drop_last=False)
@@ -171,6 +180,8 @@ def main(cfg: DictConfig):
         epoch += 1
         for (x0,y0) in train_loader:
             iteration += 1
+            unet.train()
+            clf.train()
 
             # Sample data and noise
             x0, eps = x0.cuda(), torch.randn_like(x0).cuda()
@@ -178,8 +189,8 @@ def main(cfg: DictConfig):
             xsi, xsip1 = x0 + eps * si.reshape(-1,1,1,1), x0 + eps * sip1.reshape(-1,1,1,1)
 
             # Consistency Training
-            unet.train()
-            clf.eval()
+            for p in clf.parameters():
+                p.requires_grad_(False)
             
             rng_state = torch.cuda.get_rng_state()
             with torch.no_grad():
@@ -206,11 +217,13 @@ def main(cfg: DictConfig):
             update_ema(net=unet.module, net_ema=unet_ema, ema_decay=cfg['exp']['ema_decay'])
             
             # Classifier Training
-            clf.train()
+            for p in clf.parameters():
+                p.requires_grad_(True)
             
             opt_clf.zero_grad()
             x_real, x_fake = x0.detach().clone(), D_xsip1.detach().clone()
             loss_clf = (0.0 - clf(x_real)).square().mean() + (1.0 - clf(x_fake)).square().mean()
+            loss_clf += compute_r1_loss(clf, x_real, gamma=10.0)
             loss_clf.backward()
             opt_clf.step()
 
@@ -227,9 +240,9 @@ def main(cfg: DictConfig):
 
                 # Logging
                 if use_wandb:
-                    stats = {'Loss CM' : loss_cm.item(),
+                    stats = {'Loss CM'  : loss_cm.item(),
                              'Loss Adv' : loss_adv_prox.item(),
-                             'FID'     : curr_fid}
+                             'FID'      : curr_fid}
                     wandb.log(stats)
                 logger.info('[{}] Iteration {} Loss {:.3f} FID {:.3f} ETA {:.3f}/{:.3f} (hours)'.format(exp_name, iteration, loss.item(), curr_fid, dur, eta))
 
