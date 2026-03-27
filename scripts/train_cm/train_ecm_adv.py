@@ -12,6 +12,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 from pytorch_fid.fid_score import calculate_fid_given_paths
 from omegaconf import DictConfig, OmegaConf
+from torch.nn.functional import softplus
 import torch.distributed as dist
 from torch.func import jvp
 from tqdm import tqdm
@@ -202,7 +203,7 @@ def main(cfg: DictConfig):
             loss_cm, loss_cm_gnorm = criterion(D_xsip1,D_xsi,w=w_icm)
             
             D_xsip1_cp = D_xsip1.detach().clone().requires_grad_(True)
-            loss_adv = (0.0 - clf(D_xsip1_cp)).square().mean()
+            loss_adv = softplus(-clf(D_xsip1_cp)).mean()
             loss_adv.backward()
             loss_adv_grad = D_xsip1_cp.grad.detach()
             loss_adv_prox = 0.5 * (D_xsip1 - (D_xsip1-loss_adv_grad).detach()).square().sum(dim=(1,2,3)).mean()
@@ -222,7 +223,7 @@ def main(cfg: DictConfig):
             
             opt_clf.zero_grad()
             x_real, x_fake = x0.detach().clone(), D_xsip1.detach().clone()
-            loss_clf = (0.0 - clf(x_real)).square().mean() + (1.0 - clf(x_fake)).square().mean()
+            loss_clf = softplus(-clf(x_real)).mean() + softplus(clf(x_fake)).mean()
             loss_clf += compute_r1_loss(clf, x_real, gamma=10.0)
             loss_clf.backward()
             opt_clf.step()
