@@ -174,10 +174,7 @@ class AutoEncoder(nn.Module):
         y_feats = self.forward(y,return_feats=True)
         for i in range(len(x_feats)):
             xf, yf = x_feats[i], y_feats[i]
-            if i < len(x_feats)-1:
-                diffs += ph(xf-yf,dim=(2,3)).sum(dim=1)
-            else:
-                diffs += ph((xf-yf)[...,None],dim=2).sum(dim=1)
+            diffs += ph(xf-yf,dim=(2,3)).sum(dim=1)
         
         if reduce_mean:
             diffs = diffs.mean()
