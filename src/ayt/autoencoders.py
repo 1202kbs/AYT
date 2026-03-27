@@ -161,7 +161,7 @@ class AutoEncoder(nn.Module):
     
     def forward(self, x, return_feats=False):
         z, feats = self.enc(x)
-        x = self.dec(z)
+        x = self.dec(z + torch.randn_like(z) * 0.05)
         
         if return_feats:
             return feats
