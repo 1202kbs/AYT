@@ -1,4 +1,4 @@
-from ayt.utils import set_reproducibility, save_images, create_dir_if_empty, get_module
+from ayt.utils import set_reproducibility, save_images, get_module
 from pytorch_fid.fid_score import calculate_fid_given_paths
 from ayt.constants import CONFIG_ROOT, RESULT_ROOT
 from ayt.solvers import Euler, EulerMaruyama
@@ -36,9 +36,6 @@ def main(cfg: DictConfig):
     e_idx = cfg['exp']['e_idx']
     unit = cfg['exp']['unit']
     device_ids = list(range(torch.cuda.device_count()))
-
-    # result_dir = os.path.join(RESULT_ROOT, exp_name)
-    # create_dir_if_empty(result_dir)
     result_dir = ckpt_dir
 
     # Dataset
@@ -62,7 +59,8 @@ def main(cfg: DictConfig):
 
     # Evaluation loop
     FIDs = {}
-    ckpt_paths = [os.path.join(ckpt_dir,'unet_ema_iter{}.pt'.format(unit*i)) for i in range(s_idx,e_idx+1)]
+    ckpt_paths = [os.path.join(ckpt_dir,'unet_ema_best.pt')]
+    ckpt_paths += [os.path.join(ckpt_dir,'unet_ema_iter{}.pt'.format(unit*i)) for i in range(s_idx,e_idx+1)]
     for ckpt_path in tqdm(ckpt_paths):
         print('Evaluating [{}] with discretization {}'.format(ckpt_path,disc))
         FIDs[ckpt_path] = []
