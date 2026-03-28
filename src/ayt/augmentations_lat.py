@@ -58,12 +58,13 @@ def translate2d(tx, ty, **kwargs):
         [0, 0, 1],
         **kwargs)
 
-def translate3d(tx, ty, tz, **kwargs):
+def translate4d(tx, ty, tz, tw, **kwargs):
     return matrix(
-        [1, 0, 0, tx],
-        [0, 1, 0, ty],
-        [0, 0, 1, tz],
-        [0, 0, 0, 1],
+        [1, 0, 0, 0, tx],
+        [0, 1, 0, 0, ty],
+        [0, 0, 1, 0, tz],
+        [0, 0, 0, 1, tw],
+        [0, 0, 0, 0, 1],
         **kwargs)
 
 def scale2d(sx, sy, **kwargs):
@@ -73,12 +74,13 @@ def scale2d(sx, sy, **kwargs):
         [0,  0,  1],
         **kwargs)
 
-def scale3d(sx, sy, sz, **kwargs):
+def scale4d(sx, sy, sz, sw, **kwargs):
     return matrix(
-        [sx, 0,  0,  0],
-        [0,  sy, 0,  0],
-        [0,  0,  sz, 0],
-        [0,  0,  0,  1],
+        [sx, 0,  0,  0,  0],
+        [0,  sy, 0,  0,  0],
+        [0,  0,  sz, 0,  0],
+        [0,  0,  0,  sw, 0],
+        [0,  0,  0,  0,  1],
         **kwargs)
 
 def rotate2d(theta, **kwargs):
@@ -137,21 +139,12 @@ def apply_gaussian_blur(image, kernel):
 @persistence.persistent_class
 class AugmentPipe:
     def __init__(self, p=1,
-        xflip=0, yflip=0, rotate_int=0, translate_int=0, translate_int_max=0.125,
         scale=0, rotate_frac=0, aniso=0, translate_frac=0, scale_std=0.2, rotate_frac_max=1, aniso_std=0.2, aniso_rotate_prob=0.5, translate_frac_std=0.125,
-        brightness=0, contrast=0, lumaflip=0, hue=0, saturation=0, brightness_std=0.2, contrast_std=0.5, hue_max=1, saturation_std=1,
+        brightness=0, contrast=0, saturation=0, brightness_std=0.2, contrast_std=0.5, saturation_std=1,
         gaussian_blur=0, blur_kernel_size=11, blur_sigma_max=6,
-        mixup=0, noise=0, mixup_beta = 1.0, noise_std=1.0,
     ):
         super().__init__()
         self.p                  = float(p)                  # Overall multiplier for augmentation probability.
-
-        # Pixel blitting.
-        self.xflip              = float(xflip)              # Probability multiplier for x-flip.
-        self.yflip              = float(yflip)              # Probability multiplier for y-flip.
-        self.rotate_int         = float(rotate_int)         # Probability multiplier for integer rotation.
-        self.translate_int      = float(translate_int)      # Probability multiplier for integer translation.
-        self.translate_int_max  = float(translate_int_max)  # Range of integer translation, relative to image dimensions.
 
         # Geometric transformations.
         self.scale              = float(scale)              # Probability multiplier for isotropic scaling.
@@ -167,12 +160,9 @@ class AugmentPipe:
         # Color transformations.
         self.brightness         = float(brightness)         # Probability multiplier for brightness.
         self.contrast           = float(contrast)           # Probability multiplier for contrast.
-        self.lumaflip           = float(lumaflip)           # Probability multiplier for luma flip.
-        self.hue                = float(hue)                # Probability multiplier for hue rotation.
         self.saturation         = float(saturation)         # Probability multiplier for saturation.
         self.brightness_std     = float(brightness_std)     # Standard deviation of brightness.
         self.contrast_std       = float(contrast_std)       # Log2 standard deviation of contrast.
-        self.hue_max            = float(hue_max)            # Range of hue rotation, 1 = full circle.
         self.saturation_std     = float(saturation_std)     # Log2 standard deviation of saturation.
 
         # Photometric transformations.
@@ -180,53 +170,12 @@ class AugmentPipe:
         self.blur_kernel_size   = float(blur_kernel_size)
         self.blur_sigma_max     = float(blur_sigma_max)
 
-        # Noise perturbations.
-        self.noise              = float(noise)              # Probability multiplier for Gaussian noise.
-        self.mixup              = float(mixup)              # Probability multiplier for mixup.
-        self.noise_std          = float(noise_std)          # Noise standard deviation.
-        self.mixup_beta         = float(mixup_beta)         # Mixup beta distribution beta parameter.
-
     def __call__(self, images, mag=None):
         N, C, H, W = images.shape
         device = images.device
         labels = [torch.zeros([images.shape[0], 0], device=device)]
         mag = torch.ones([N],device=device) if (mag is None) else mag
         images = images.detach().clone()
-
-        # ---------------
-        # Pixel blitting.
-        # ---------------
-
-        if self.xflip > 0:
-            w = torch.randint(2, [N, 1, 1, 1], device=device)
-            w = torch.where(torch.rand([N, 1, 1, 1], device=device) < self.xflip * self.p, w, torch.zeros_like(w))
-            images = torch.where(w == 1, images.flip(3), images)
-            labels += [w]
-
-        if self.yflip > 0:
-            w = torch.randint(2, [N, 1, 1, 1], device=device)
-            w = torch.where(torch.rand([N, 1, 1, 1], device=device) < self.yflip * self.p, w, torch.zeros_like(w))
-            images = torch.where(w == 1, images.flip(2), images)
-            labels += [w]
-
-        if self.rotate_int > 0:
-            w = torch.randint(4, [N, 1, 1, 1], device=device)
-            w = torch.where(torch.rand([N, 1, 1, 1], device=device) < self.rotate_int * self.p, w, torch.zeros_like(w))
-            images = torch.where((w == 1) | (w == 2), images.flip(3), images)
-            images = torch.where((w == 2) | (w == 3), images.flip(2), images)
-            images = torch.where((w == 1) | (w == 3), images.transpose(2, 3), images)
-            labels += [(w == 1) | (w == 2), (w == 2) | (w == 3)]
-
-        if self.translate_int > 0:
-            w = torch.rand([2, N, 1, 1, 1], device=device) * 2 - 1
-            w = torch.where(torch.rand([1, N, 1, 1, 1], device=device) < self.translate_int * self.p, w, torch.zeros_like(w))
-            tx = w[0].mul(W * self.translate_int_max).round().to(torch.int64)
-            ty = w[1].mul(H * self.translate_int_max).round().to(torch.int64)
-            b, c, y, x = torch.meshgrid(*(torch.arange(x, device=device) for x in images.shape), indexing='ij')
-            x = W - 1 - (W - 1 - (x - tx) % (W * 2 - 2)).abs()
-            y = H - 1 - (H - 1 - (y + ty) % (H * 2 - 2)).abs()
-            images = images.flatten()[(((b * C) + c) * H + y) * W + x]
-            labels += [tx.div(W * self.translate_int_max), ty.div(H * self.translate_int_max)]
 
         # ------------------------------------------------
         # Select parameters for geometric transformations.
@@ -311,55 +260,37 @@ class AugmentPipe:
         # Select parameters for color transformations.
         # --------------------------------------------
 
-        I_4 = torch.eye(4, device=device)
-        M = I_4
-        luma_axis = misc.constant(np.asarray([1, 1, 1, 0]) / np.sqrt(3), device=device)
+        I_5 = torch.eye(5, device=device)
+        M = I_5
+        luma_axis = misc.constant(np.asarray([1, 1, 1, 1, 0]) / np.sqrt(3), device=device)
 
         if self.brightness > 0:
             w = mag * torch.randn([N], device=device)
             w = torch.where(torch.rand([N], device=device) < self.brightness * self.p, w, torch.zeros_like(w))
             b = w * self.brightness_std
-            M = translate3d(b, b, b) @ M
+            M = translate4d(b, b, b, b) @ M
             labels += [w]
 
         if self.contrast > 0:
             w = mag * torch.randn([N], device=device)
             w = torch.where(torch.rand([N], device=device) < self.contrast * self.p, w, torch.zeros_like(w))
             c = w.mul(self.contrast_std).exp2()
-            M = scale3d(c, c, c) @ M
+            M = scale4d(c, c, c, c) @ M
             labels += [w]
-
-        if self.lumaflip > 0:
-            w = torch.randint(2, [N, 1, 1], device=device)
-            w = torch.where(torch.rand([N, 1, 1], device=device) < self.lumaflip * self.p, w, torch.zeros_like(w))
-            M = (I_4 - 2 * luma_axis.ger(luma_axis) * w) @ M
-            labels += [w]
-
-        if self.hue > 0:
-            w = mag * (torch.rand([N], device=device) * 2 - 1) * (np.pi * self.hue_max)
-            w = torch.where(torch.rand([N], device=device) < self.hue * self.p, w, torch.zeros_like(w))
-            M = rotate3d(luma_axis, w) @ M
-            labels += [w.cos() - 1, w.sin()]
 
         if self.saturation > 0:
             w = mag.reshape(-1,1,1) * torch.randn([N, 1, 1], device=device)
             w = torch.where(torch.rand([N, 1, 1], device=device) < self.saturation * self.p, w, torch.zeros_like(w))
-            M = (luma_axis.ger(luma_axis) + (I_4 - luma_axis.ger(luma_axis)) * w.mul(self.saturation_std).exp2()) @ M
+            M = (luma_axis.ger(luma_axis) + (I_5 - luma_axis.ger(luma_axis)) * w.mul(self.saturation_std).exp2()) @ M
             labels += [w]
 
         # ------------------------------
         # Execute color transformations.
         # ------------------------------
 
-        if M is not I_4:
+        if M is not I_5:
             images = images.reshape([N, C, H * W])
-            if C == 3:
-                images = M[:, :3, :3] @ images + M[:, :3, 3:]
-            elif C == 1:
-                M = M[:, :3, :].mean(dim=1, keepdims=True)
-                images = images * M[:, :, :3].sum(dim=2, keepdims=True) + M[:, :, 3:]
-            else:
-                raise ValueError('Image must be RGB (3 channels) or L (1 channel)')
+            images = M[:, :4, :4] @ images + M[:, :4, 4:]
             images = images.reshape([N, C, H, W])
         
         # ------------------------------
@@ -373,33 +304,6 @@ class AugmentPipe:
             images_blur = torch.vmap(apply_gaussian_blur)(images,kernels)
             images[w>0.0] = images_blur[w>0.0]
             labels += [w]
-        
-        # ------------------------------------------------
-        # Select parameters for additive perturbation.
-        # ------------------------------------------------
-
-        EPS = torch.zeros([N,C,H,W], device=device)
-
-        if self.mixup > 0:
-            w = mag * 0.5 * torch.tensor(np.random.beta(a=1.0,b=self.mixup_beta,size=N), dtype=float, device=device)
-            w = torch.where(torch.rand([N], device=device) < self.mixup * self.p, w, torch.zeros_like(w))
-            images_perm = images.flip(dims=[0])
-            EPS += w.reshape(-1,1,1,1) * (images_perm - images)
-            labels += [w]
-
-        if self.noise > 0:
-            w = mag * torch.rand([N], device=device) * self.noise_std
-            w = torch.where(torch.rand([N], device=device) < self.noise * self.p, w, torch.zeros_like(w))
-            shell = torch.randn([N,C,H,W], device=device)
-            shell = np.sqrt(C*H*W) * shell / (shell.flatten(start_dim=1).norm(dim=1)).reshape(-1,1,1,1)
-            EPS += w.reshape(-1,1,1,1) * shell
-            labels += [w]
-        
-        # ------------------------------
-        # Execute additive perturbation.
-        # ------------------------------
-
-        images = images + EPS
 
         # ------------------------------
         # Return augmented image and label.
@@ -413,11 +317,6 @@ class AugmentPipe:
 def get_augmentation(cfg):
     aug = AugmentPipe(
         p = cfg['p'],
-        xflip = cfg['xflip'],
-        yflip = cfg['yflip'],
-        rotate_int = cfg['rotate_int'],
-        translate_int = cfg['translate_int'],
-        translate_int_max = cfg['translate_int_max'],
         scale = cfg['scale'],
         rotate_frac = cfg['rotate_frac'],
         aniso = cfg['aniso'],
@@ -429,19 +328,12 @@ def get_augmentation(cfg):
         translate_frac_std = cfg['translate_frac_std'],
         brightness = cfg['brightness'],
         contrast = cfg['contrast'],
-        lumaflip = cfg['lumaflip'],
-        hue = cfg['hue'],
         saturation = cfg['saturation'],
         brightness_std = cfg['brightness_std'],
         contrast_std = cfg['contrast_std'],
-        hue_max = cfg['hue_max'],
         saturation_std = cfg['saturation_std'],
         gaussian_blur=cfg['gaussian_blur'],
         blur_kernel_size=cfg['blur_kernel_size'],
-        blur_sigma_max=cfg['blur_sigma_max'],
-        mixup = cfg['mixup'],
-        mixup_beta = cfg['mixup_beta'],
-        noise = cfg['noise'],
-        noise_std = cfg['noise_std'],
+        blur_sigma_max=cfg['blur_sigma_max']
     )
     return aug
