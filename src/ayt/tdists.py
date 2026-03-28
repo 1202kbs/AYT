@@ -7,7 +7,7 @@ def get_tdist(cfg):
         return Lognormal(mu=cfg['mu'], std=cfg['std'])
     elif cfg['name'] == 'continuouslognormal':
         return ContinuousLognormal(mu=cfg['mu'], std=cfg['std'], q=cfg['q'], k=cfg['k'],
-                                   b=cfg['b'], n_stages=cfg['n_stages'], adj=cfg['adj'])
+                                   b=cfg['b'], n_stages=cfg['n_stages'], n_train_iter=cfg['n_train_iter'], adj=cfg['adj'])
     elif cfg['name'] == 'uniform':
         return Uniform()
 

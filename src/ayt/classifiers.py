@@ -580,7 +580,7 @@ def get_classifier(cfg):
                 mlp_dim=2048)
     elif 'ResNet' in cfg['name']:
         return ResNet(block=BasicBlock,
-                      num_blocks=[1,1,1,1],
+                      num_blocks=cfg['num_blocks'],
                       num_classes=cfg['n_classes'])
     elif 'DenseNet' in cfg['name']:
         return DenseNet(block=DenseNetBottleneck,

@@ -1,3 +1,4 @@
 name: ResNet
 n_classes: 15
+num_blocks: [2,2,2,2]
 ckpt_path: Null
